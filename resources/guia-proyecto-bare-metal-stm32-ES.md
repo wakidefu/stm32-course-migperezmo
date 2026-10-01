@@ -20,13 +20,13 @@ Usa el mismo asistente de la guía de instalación (barra lateral de STM32Cube �
 
 ## 2. Enlazar los headers de CMSIS (sin copiarlos)
 
-En lugar de copiar carpetas dentro del proyecto, apuntamos `CMakeLists.txt` directamente al repositorio local de ST. Esto evita duplicar archivos, pero significa que la ruta queda fija a esta máquina — si el proyecto se comparte, solo hay que cambiar una línea (`CMSIS_ROOT`).
+En lugar de copiar carpetas dentro del proyecto, apuntamos `CMakeLists.txt` directamente al repositorio local de ST. Esto evita duplicar archivos, pero significa que la ruta queda fija a esta máquina — si el proyecto se comparte, solo hay que cambiar una línea (`CMSIS_ROOT`).a
 
 Abre `CMakeLists.txt` y agrega, cerca del inicio (después de `project(...)`):
 
 ```cmake
 # Ruta al paquete de firmware STM32Cube (ajusta la versión si cambia)
-set(CMSIS_ROOT "/home/namontoy/STM32Cube/Repository/STM32Cube_FW_F4_V1.28.3")
+set(CMSIS_ROOT "/home/<home_estudiante>/STM32Cube/Repository/STM32Cube_FW_F4_V1.28.3")
 ```
 
 Y en la definición de tu ejecutable/target, agrega:

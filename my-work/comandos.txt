@@ -1,0 +1,39 @@
+tarjeta
+NUCLEO-F411RE
+==========================================================================
+#include "stm32f411xe.h"
+#include "stm32f4xx.h"
+
+==========================================================================
+# Ruta al paquete de firmware STM32Cube (ajusta la versión si cambia)
+set(CMSIS_ROOT "/home/migue/STM32Cube/Repository/STM32Cube_FW_F4_V1.28.0")
+
+# Add sources to executable/library
+target_sources(${PROJECT_NAME} PRIVATE
+    ${CMSIS_ROOT}/Drivers/CMSIS/Device/ST/STM32F4xx/Source/Templates/system_stm32f4xx.c
+)
+
+# Add include directories
+target_include_directories(${PROJECT_NAME} PRIVATE
+    ${CMSIS_ROOT}/Drivers/CMSIS/Core/Include
+    ${CMSIS_ROOT}/Drivers/CMSIS/Device/ST/STM32F4xx/Include
+)
+
+# Compiler options
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    STM32F411xE   # usa STM32F446xx si trabajas con NUCLEO-F446RE
+)
+
+==========================================================================
+.clangd
+CompileFlags:
+  CompilationDatabase: build/Debug
+==========================================================================
+settings.json
+{
+  "C_Cpp.intelliSenseEngine": "disabled"
+}
+
+=========================================================================
+~/Descargas/setup-stm32.sh --force ~/github/stm32-course-migperezmo/my-work/<Archivo>/
+

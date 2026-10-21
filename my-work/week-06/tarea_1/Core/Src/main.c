@@ -14,13 +14,26 @@
  * If no LICENSE file comes with this software, it is provided AS-IS.
  *
  ******************************************************************************
+* @brief          : Tarea de Contador Bidireccional con Fotodetectores y Display de 7 Segmentos (x4)
+ * 
+ * Descripción del proyecto:
+ * Este programa implementa un contador numérico de 0 a 9999 en un microcontrolador STM32F411RE. 
+ * El sistema interactúa con el entorno mediante los siguientes componentes de hardware:
+ * 
+ * Fotodetectores (Entradas por Interrupción Externa - EXTI):
+ * - Fotodetector de incremento: Conectado a PB12 (EXTI12, flanco de subida) -> Aumenta el contador en 1.
+ * - Fotodetector de decremento: Conectado a PA10 (EXTI10, flanco de subida) -> Disminuye el contador en 1.
+ * 
+ * Display de 7 segmentos (Multiplexado por POV - Persistencia de Visión):
+ * - Segmentos de los dígitos conectados a los pines de los puertos GPIOA, GPIOB y GPIOC 
+ *   (PA0, PA1, PA4, PB0, PB1, PB2, PB15, PC8, PC9, PC10, PC12).
+ * - Transistores de control por dígito (ánodos/cátodos comunes): PC3, PB13, PC2 y PB14.
+ * - El refresco se realiza mediante el temporizador TIM3 cada 5 ms.
+ * 
+ * Led de estado (Blinking):
+ * - Conectado al pin PH1. Parpadea (blinking) cada 500 ms controlado de forma independiente 
+ *   por el temporizador TIM2.
  */
-
-/* tarea: con 2 fotodetectores y un 7 segmentos (x4) display, hacer un contador
-que cuando se accione uno de los fotodetectores, el contador aumente en 1 y cuando se
-accione el otro fotodetector, el contador disminuya en 1. El contador debe mostrarse 
-en el display de 7 segmentos.
-*/
 #include "stdint.h"
 #include "stm32f411xe.h"
 #include "stm32f4xx.h"
@@ -70,34 +83,34 @@ int main(void){
     init_timer3(); // Configurar TIM3 para multiplexado del display
 
     while (1) {
-    uint8_t d_actual = valor_display;
+        uint8_t d_actual = valor_display;
 
-    uint16_t divisor = 1;
-    switch (d_actual) {
-        case 0: divisor = 1;    break;
-        case 1: divisor = 10;   break;
-        case 2: divisor = 100;  break;
-        case 3: divisor = 1000; break;
+        uint16_t divisor = 1;
+        switch (d_actual) {
+            case 0: divisor = 1;    break;
+            case 1: divisor = 10;   break;
+            case 2: divisor = 100;  break;
+            case 3: divisor = 1000; break;
+        }
+
+        uint8_t digito_num = (contador / divisor) % 10;
+
+        // 3. Apagar transistores
+        GPIOB->BSRR = (GPIO_BSRR_BR13 | GPIO_BSRR_BR14);
+        GPIOC->BSRR = (GPIO_BSRR_BR2  | GPIO_BSRR_BR3);
+
+        // Actualización de segmentos
+        GPIOA->BSRR = gpioa_tabla[digito_num];
+        GPIOB->BSRR = gpiob_tabla[digito_num];
+
+        // Encender el transistor correspondiente al dígito actual
+        switch (d_actual) {
+            case 0: GPIOC->BSRR = GPIO_BSRR_BS3;  break; // Unidades -> PC3
+            case 1: GPIOB->BSRR = GPIO_BSRR_BS13; break; // Decenas  -> PB13
+            case 2: GPIOC->BSRR = GPIO_BSRR_BS2;  break; // Centenas -> PC2
+            case 3: GPIOB->BSRR = GPIO_BSRR_BS14; break; // Miles    -> PB14
+        }
     }
-
-    uint8_t digito_num = (contador / divisor) % 10;
-
-    // 3. Apagar transistores
-    GPIOB->BSRR = (GPIO_BSRR_BR13 | GPIO_BSRR_BR14);
-    GPIOC->BSRR = (GPIO_BSRR_BR2  | GPIO_BSRR_BR3);
-
-    // Actualización de segmentos
-    GPIOA->BSRR = gpioa_tabla[digito_num];
-    GPIOB->BSRR = gpiob_tabla[digito_num];
-
-    // Encender el transistor correspondiente al dígito actual
-    switch (d_actual) {
-        case 0: GPIOC->BSRR = GPIO_BSRR_BS3;  break; // Unidades -> PC3
-        case 1: GPIOB->BSRR = GPIO_BSRR_BS13; break; // Decenas  -> PB13
-        case 2: GPIOC->BSRR = GPIO_BSRR_BS2;  break; // Centenas -> PC2
-        case 3: GPIOB->BSRR = GPIO_BSRR_BS14; break; // Miles    -> PB14
-    }
-}
 }
 
 void init_GPIO(void) {
@@ -151,6 +164,7 @@ void init_GPIO(void) {
     GPIOB->OTYPER &= ~(GPIO_OTYPER_OT0 | GPIO_OTYPER_OT1 | GPIO_OTYPER_OT2 | GPIO_OTYPER_OT13 | GPIO_OTYPER_OT14 | GPIO_OTYPER_OT15); 
     GPIOB->OSPEEDR |= (GPIO_OSPEEDR_OSPEED0_0 | GPIO_OSPEEDR_OSPEED1_0 | GPIO_OSPEEDR_OSPEED2_0 | GPIO_OSPEEDR_OSPEED13_0 | GPIO_OSPEEDR_OSPEED14_0 | GPIO_OSPEEDR_OSPEED15_0); 
     GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPD0 | GPIO_PUPDR_PUPD1 | GPIO_PUPDR_PUPD2 | GPIO_PUPDR_PUPD13 | GPIO_PUPDR_PUPD14 | GPIO_PUPDR_PUPD15);
+
     // GPIOC: PC2, PC3
     GPIOC->MODER &= ~(GPIO_MODER_MODE2 | GPIO_MODER_MODE3); 
     GPIOC->MODER |=  (GPIO_MODER_MODE2_0 | GPIO_MODER_MODE3_0); 
@@ -183,11 +197,11 @@ void init_timer2(void) { // led blink cada 500 ms
     // Reloj base APB1 = 16 MHz por defecto (HSI)
     RCC->APB1ENR |= RCC_APB1ENR_TIM2EN; 
 
-    TIM2->PSC = 16000 - 1; // F_timer = 16MHz / 16000 = 1 kHz (Pasos de 1 ms)
-    TIM2->ARR = 500 - 1;   // Interrupción cada 500 ms (0.5 segundos)
+    TIM2->PSC = 16000 - 1; // Pasos de 1 ms
+    TIM2->ARR = 500 - 1;   // Interrupción cada 500 ms
     TIM2->CNT = 0;
 
-    TIM2->DIER |= TIM_DIER_UIE;   // Habilitar interrupción de actualización
+    TIM2->DIER |= TIM_DIER_UIE;   // Habilitar interrupción 
     TIM2->CR1 &= ~TIM_CR1_DIR;    // Modo ascendente
     TIM2->CR1 |= TIM_CR1_ARPE;    // Auto-reload preload enable
 
@@ -199,11 +213,11 @@ void init_timer2(void) { // led blink cada 500 ms
 void init_timer3(void) { // Timer3 para multiplexado del display
     RCC->APB1ENR |= RCC_APB1ENR_TIM3EN; // Habilitar reloj de TIM3
 
-    TIM3->PSC = 16000 - 1; // F_timer = 16MHz / 16000 = 1 kHz (Pasos de 1 ms)
+    TIM3->PSC = 16000 - 1; // Pasos de 1 ms
     TIM3->ARR = 5 - 1;     // Interrupción cada 5 ms
     TIM3->CNT = 0;
 
-    TIM3->DIER |= TIM_DIER_UIE;   // Habilitar interrupción de actualización
+    TIM3->DIER |= TIM_DIER_UIE;   // Habilitar interrupción 
     TIM3->CR1 &= ~TIM_CR1_DIR;    // Modo ascendente
     TIM3->CR1 |= TIM_CR1_ARPE;    // Auto-reload preload enable
 

@@ -27,42 +27,77 @@ en el display de 7 segmentos.
 
 // --- VARIABLES GLOBALES ---
 volatile uint16_t contador = 0; 
-volatile uint8_t digitos_display[4] = {0, 0, 0, 0};
-volatile uint8_t digito_actual = 0; 
+volatile uint8_t valor_display = 0; // Dígito del display (0-3)
+const uint16_t divisor[4] = {1, 10, 100, 1000};
 
-static const uint8_t tabla_seg[10] = {
-    0b11000000, // (A,B,C,D,E,F,_)
-    0b11111001, // (_,B,C,_,_,_,_)
-    0b10100100, // (A,B,_,D,E,_,G)
-    0b10110000, // (A,B,C,D,_,_,G)
-    0b10011001, // (_,B,C,_,_,F,G)
-    0b10010010, // (A,_,C,D,_,F,G)
-    0b10000010, // (A,_,_,D,E,F,G)
-    0b11111000, // (_,B,C,D,E,F,G)
-    0b10000000, // (A,_,_,_,E,F,G)
-    0b10010000  // (A,_,C,_,_,F,G)
+// GPIOB: A(15), B(2), E(0), F(1)
+static const uint32_t gpiob_tabla[10] = {
+    ( (1U << 15) | (1U << 2) | (1U << 0) | (1U << 1) ) << 16,                       // 0: A, B, E, F
+    ((1U << 15) | (1U << 0) | (1U << 1)) | ( (1U << 2) ) << 16,                     // 1: B
+    ((1U << 1)) | ( (1U << 15) | (1U << 2) | (1U << 0) ) << 16,                     // 2: A, B, E
+    ((1U << 0) | (1U << 1)) | ( (1U << 15) | (1U << 2) ) << 16,                     // 3: A, B
+    ((1U << 15) | (1U << 0)) | ( (1U << 2) | (1U << 1) ) << 16,                     // 4: B, F
+    ((1U << 2) | (1U << 0)) | ( (1U << 15) | (1U << 1) ) << 16,                     // 5: A, F
+    ((1U << 2)) | ( (1U << 15) | (1U << 0) | (1U << 1) ) << 16,                     // 6: A, E, F
+    ((1U << 0) | (1U << 1)) | ( (1U << 15) | (1U << 2) ) << 16,                     // 7: A, B
+    ( (1U << 15) | (1U << 2) | (1U << 0) | (1U << 1) ) << 16,                       // 8: A, B, E, F
+    ((1U << 0)) | ( (1U << 15) | (1U << 2) | (1U << 1) ) << 16                      // 9: A, B, F
 };
 
+// GPIOA: C(1), D(4), G(0)
+static const uint32_t gpioa_tabla[10] = {
+    ((1U << 0)) | ( (1U << 1) | (1U << 4) ) << 16,                                  // 0: C, D 
+    ((1U << 4) | (1U << 0)) | ( (1U << 1) ) << 16,                                  // 1: C
+    ((1U << 1)) | ( (1U << 4) | (1U << 0) ) << 16,                                  // 2: D, G 
+    ( (1U << 1) | (1U << 4) | (1U << 0) ) << 16,                                    // 3: C, D, G
+    ((1U << 4)) | ( (1U << 1) | (1U << 0) ) << 16,                                  // 4: C, G
+    ( (1U << 1) | (1U << 4) | (1U << 0) ) << 16,                                    // 5: C, D, G
+    ( (1U << 1) | (1U << 4) | (1U << 0) ) << 16,                                    // 6: C, D, G
+    ((1U << 4) | (1U << 0)) | ( (1U << 1) ) << 16,                                  // 7: C
+    ( (1U << 1) | (1U << 4) | (1U << 0) ) << 16,                                    // 8: C, D, G
+    ( (1U << 1) | (1U << 4) | (1U << 0) ) << 16                                     // 9: C, D, G
+};
 
-// --- PROTOTIPOS DE FUNCIONES ---
 void init_GPIO(void);
 void init_exti(void);
 void init_timer2(void);
 void init_timer3(void);
 
-int main(void)
-{
+int main(void){
     init_GPIO();  // Configurar registros GPIO
     init_exti();  // Configurar interrupciones externas
     init_timer2(); // Configurar TIM2 y habilitar interrupciones
-    init_timer3(); // Configurar TIM3 para multiplexado del displayno
+    init_timer3(); // Configurar TIM3 para multiplexado del display
 
     while (1) {
-        digitos_display[0] = contador % 10; // unidades
-        digitos_display[1] = (contador / 10) % 10; // decenas
-        digitos_display[2] = (contador / 100) % 10; // centenas
-        digitos_display[3] = (contador / 1000) % 10; // millares
+    uint8_t d_actual = valor_display;
+
+    uint16_t divisor = 1;
+    switch (d_actual) {
+        case 0: divisor = 1;    break;
+        case 1: divisor = 10;   break;
+        case 2: divisor = 100;  break;
+        case 3: divisor = 1000; break;
     }
+
+    uint8_t digito_num = (contador / divisor) % 10;
+
+    // 3. Apagar transistores
+    GPIOB->BSRR = (GPIO_BSRR_BR13 | GPIO_BSRR_BR14);
+    GPIOC->BSRR = (GPIO_BSRR_BR2  | GPIO_BSRR_BR3);
+
+    // Actualización de segmentos
+    GPIOA->BSRR = gpioa_tabla[digito_num];
+    GPIOB->BSRR = gpiob_tabla[digito_num];
+
+    // Encender el transistor correspondiente al dígito actual
+    switch (d_actual) {
+        case 0: GPIOC->BSRR = GPIO_BSRR_BS3;  break; // Unidades -> PC3
+        case 1: GPIOB->BSRR = GPIO_BSRR_BS13; break; // Decenas  -> PB13
+        case 2: GPIOC->BSRR = GPIO_BSRR_BS2;  break; // Centenas -> PC2
+        case 3: GPIOB->BSRR = GPIO_BSRR_BS14; break; // Miles    -> PB14
+    }
+}
 }
 
 void init_GPIO(void) {
@@ -128,11 +163,11 @@ void init_exti(void) { // interrupciones externas para PB12 y PA10
     // Habilitar el reloj del SYSCFG
     RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN; //Habilitar reloj del SYSCFG
 
-    // Congiguración de EXTI10 (PA10)
+    // Congiguracion de EXTI10 (PA10)
     SYSCFG->EXTICR[2] &= ~SYSCFG_EXTICR3_EXTI10_Msk; // Limpiar bits EXTI10
     SYSCFG->EXTICR[2] |= SYSCFG_EXTICR3_EXTI10_PA; // Configurar EXTI10 para PA10
 
-    // Configuración de EXTI12 (PB12)
+    // Configuracin de EXTI12 (PB12)
     SYSCFG->EXTICR[3] &= ~SYSCFG_EXTICR4_EXTI12_Msk; // Limpiar bits EXTI12
     SYSCFG->EXTICR[3] |= SYSCFG_EXTICR4_EXTI12_PB; // Configurar EXTI12 para PB12
 
@@ -178,35 +213,12 @@ void init_timer3(void) { // Timer3 para multiplexado del display
 }
 
 void TIM3_IRQHandler(void) {
-    TIM3->SR &= ~TIM_SR_UIF; // Limpiar bandera
+    if (TIM3->SR & TIM_SR_UIF) { // Verificar bandera de actualización
+        TIM3->SR &= ~TIM_SR_UIF; // Limpiar bandera escribiendo 0 en bit UIF
 
-    // 1. Apagar transistores para evitar ghosting
-    GPIOB->BSRR = (GPIO_BSRR_BR13 | GPIO_BSRR_BR14);
-    GPIOC->BSRR = (GPIO_BSRR_BR2  | GPIO_BSRR_BR3);
-    // 2. Obtener el patrón del dígito actual
-    uint8_t patron = tabla_seg[digitos_display[digito_actual]];
-
-    // Mapeo de segmentos GPIOA (C: PA1 | D: PA4 | G: PA0)
-    GPIOA->BSRR = ((patron & (1 << 2)) ? GPIO_BSRR_BS1 : GPIO_BSRR_BR1) |
-                  ((patron & (1 << 3)) ? GPIO_BSRR_BS4 : GPIO_BSRR_BR4) |
-                  ((patron & (1 << 6)) ? GPIO_BSRR_BS0 : GPIO_BSRR_BR0);
-
-    // Mapeo de segmentos GPIOB (A: PB15 | B: PB2 | E: PB0 | F: PB1)
-    GPIOB->BSRR = ((patron & (1 << 0)) ? GPIO_BSRR_BS15 : GPIO_BSRR_BR15) |
-                  ((patron & (1 << 1)) ? GPIO_BSRR_BS2  : GPIO_BSRR_BR2)  |
-                  ((patron & (1 << 4)) ? GPIO_BSRR_BS0  : GPIO_BSRR_BR0)  |
-                  ((patron & (1 << 5)) ? GPIO_BSRR_BS1  : GPIO_BSRR_BR1);
-
-    // 3. Mapeo corregido según el resultado del diagnóstico 4321
-    switch (digito_actual) {
-        case 0: GPIOC->BSRR = GPIO_BSRR_BS3;  break; // Unidades  -> PC3
-        case 1: GPIOB->BSRR = GPIO_BSRR_BS13; break; // Decenas   -> PB13
-        case 2: GPIOC->BSRR = GPIO_BSRR_BS2;  break; // Centenas  -> PC2
-        case 3: GPIOB->BSRR = GPIO_BSRR_BS14; break; // Miles     -> PB14
+        // Avanzar al siguiente dígito del display
+        valor_display = (valor_display + 1) & 0x03; // Ciclo entre 0 y 3
     }
-
-    // 4. Barrido ascendente
-    digito_actual = (digito_actual + 1) & 0x03;
 }
 
 void EXTI15_10_IRQHandler(void) {    // Manejador de interrupción para EXTI11 y EXTI12
